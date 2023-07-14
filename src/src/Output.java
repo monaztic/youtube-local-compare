@@ -14,7 +14,7 @@ import java.util.Map;
 
 public class Output {
     //
-    public void printStatistics(HashMap<String, String> video_status) {
+    public void printStatistics(HashMap<String, String> video_status, boolean minimalOutput) {
         int available, unavailable, unlisted, privated;
         available = unavailable = unlisted = privated = 0;
 
@@ -116,6 +116,7 @@ public class Output {
             System.setOut(new PrintStream(logFile));
             System.out.println("Recorded online status at " + Instant.now().getEpochSecond() + " (" +
                     new java.util.Date().toString() + ")");
+            System.setOut(console);
         }
     }
 }

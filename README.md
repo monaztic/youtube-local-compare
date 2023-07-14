@@ -15,7 +15,7 @@ The following flags are available:
 
 `-nooutput` or `-no`: silences console output. Does not prevent logging to a file.
 
-`-minimaloutput` or `-mi`: only displays a count of the number of videos processed in the console, rather than displaying
+`-minimaloutput` or `-mo`: only displays a count of the number of videos processed in the console, rather than displaying
 the status of each individual video. Logging output remains the same.
 
 `-nologging` or `-nl`: does not log output to a file.

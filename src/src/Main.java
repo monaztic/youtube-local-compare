@@ -117,10 +117,13 @@ public class Main {
         // Print status of each individual video
         output.printEachVideo(videos, video_status, noOutput, minimalOutput, noLogging, youtubeTitle, logFile, console, input);
 
-        // Reset system output
-        System.setOut(System.out);
-
-        output.printStatistics(video_status);
+        if (minimalOutput) {
+            System.setOut(new PrintStream(new TeeOutputStream(console, logFile)));
+        }
+        else if (noOutput) {
+            System.setOut(new PrintStream(logFile));
+        }
+        output.printStatistics(video_status, minimalOutput);
     }
 }
 
