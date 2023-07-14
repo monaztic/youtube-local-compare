@@ -49,7 +49,11 @@ public class Input {
     }
 
     // Given the corresponding .info.json found, parse the JSON id and add it to its associated video title.
-    public void parseID(HashMap<String, String> videos, ArrayList<String> metadata, String pwd) {
+    public void parseID(HashMap<String, String> videos, ArrayList<String> metadata, String pwd, boolean youtubeTitle) {
+        int numParsed = 0;
+        if (youtubeTitle) {
+            System.out.println("Getting YouTube titles, this may take some time...");
+        }
         JSONParser parser = new JSONParser();
         for (String md : metadata) {
             try {
@@ -62,7 +66,21 @@ public class Input {
                         String nameWithoutExtension = md.substring(0, md.indexOf(".info.json"));
                         nameWithoutExtension = nameWithoutExtension.replace(pwd + "/", "");
                         if (video.getKey().equals(nameWithoutExtension)) {
-                            videos.put(video.getKey(), id);
+                            if (youtubeTitle) {
+                                String title = (String) json.get("title");
+                                Document document = Jsoup.connect("https://www.youtube.com/watch?v=" + id).get();
+                                String videoTitle = document.title().substring(0, document.title().lastIndexOf(" - YouTube"));
+                                if (!title.equals(videoTitle)) {
+                                    videos.remove(video.getKey());
+                                    videos.put("!" + title, id);
+                                }
+                                else {
+                                    videos.remove(video.getKey());
+                                    videos.put(title, id);
+                                }
+                                System.out.print(++numParsed + " titles parsed...\r");
+                            }
+                            else { videos.put(video.getKey(), id); }
                         }
                     }
                 }
@@ -78,28 +96,30 @@ public class Input {
         con.setRequestMethod("GET");
         BufferedReader read = new BufferedReader(new InputStreamReader(con.getInputStream()));
         String line;
-        String status = "available";
+        String status = "Available";
         boolean isPrivate = true;
         while ((line = read.readLine()) != null) {
             if (line.contains("This video isn't available")) {
-                status = "unavailable";
+                status = "Unavailable";
             } else if (line.contains("\"isUnlisted\":true")) {
-                status = "unlisted";
+                status = "Unlisted";
                 break;
             } else if (line.contains("\"isPrivate:\":false")) {
                 isPrivate = false;
             } else if (line.contains("terminated")) {
-                status = "terminated";
+                status = "Terminated";
                 break;
             }
         }
         Document document = Jsoup.connect("https://www.youtube.com/watch?v=" + id).get();
-        if (document.title().equals("- YouTube") && status.equals("terminated")) {
+        if (document.title().equals("- YouTube") && status.equals("Terminated")) {
             isPrivate = false;
         }
-        else if (!document.title().equals("- YouTube")) { isPrivate = false; }
+        else if (!document.title().equals("- YouTube")) {
+            isPrivate = false;
+        }
         if (isPrivate) {
-            status = "private";
+            status = "Private";
         }
         read.close();
         return status;

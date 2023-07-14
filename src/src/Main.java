@@ -1,8 +1,16 @@
 package src;
+import com.sun.tools.jconsole.JConsoleContext;
+import org.jsoup.Jsoup;
+import org.jsoup.internal.StringUtil;
+import org.jsoup.nodes.Document;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.*;
 import java.util.Scanner;
+import org.apache.commons.io.output.TeeOutputStream;
 
 public class Main {
 
@@ -10,22 +18,40 @@ public class Main {
         String pwd = ""; // present working directory
         String arg; // argument
         int i = 0;
+        FileOutputStream logFile = null; // Stream to output to log file
         HashMap<String, String> videos = new HashMap<>(); // video title and id
         ArrayList<String> metadataName = new ArrayList<>(); // metadata filename
         boolean noOutput = false;
+        boolean minimalOutput = false;
         boolean noLogging = false;
+        boolean youtubeTitle = false;
+        Input input = new Input();
+        Output output = new Output();
 
         // Parse command line arguments
         // Determine how many flags and index of argument
         for (; i < args.length && args[i].startsWith("-"); i++) {
             arg = args[i];
 
-            if (arg.equals("-nooutput")) { noOutput = true; }
-            else if (arg.equals("-nologging")) { noLogging = true; }
+            if (arg.equals("-no") || arg.equals("-nooutput")) { // cannot coexist
+                if (minimalOutput) { minimalOutput = false; }
+                noOutput = true;
+            }
+            else if (arg.equals("-nl") || arg.equals("-nologging")) { noLogging = true; }
+            else if (arg.equals("-yt")) { // cannot coexist
+                if (minimalOutput) { minimalOutput = false; }
+                youtubeTitle = true;
+            }
+            else if (arg.equals("-mo") || arg.equals("-minimaloutput")) { // cannot coexist
+                if (noOutput) { noOutput = false; }
+                if (youtubeTitle) { youtubeTitle = false; }
+                minimalOutput = true;
+            }
         }
 
-        if (i == args.length) {
-            System.out.println("Usage: youtube-local-compare [-nooutput] [-nologging] [directory]");
+        // If no arguments are entered
+        if (i == args.length && args.length != 0) {
+            System.out.println("Usage: youtube-local-compare [-no] [-nl] [-yt] [directory]");
             System.exit(0);
         }
 
@@ -45,47 +71,54 @@ public class Main {
             }
         }
 
-        Input input = new Input();
-        Output output = new Output();
+        // Create logging file
+        if (!noLogging) {
+            logFile = output.createLoggingFile(pwd, logFile);
+        }
 
+        // Redirect output to a dummy stream if no output is desired
+        if (noOutput) {
+                PrintStream dummyStream = new PrintStream(new OutputStream() {
+                    public void write(int a) {
+                    }
+                });
+
+                System.setOut(dummyStream);
+        }
+
+        // Locate the videos in the directory.
         input.findVideos(videos, pwd);
         int allVideos = videos.size(); // number of videos before pruning
-        if (videos.size() == 0) { System.out.println("There were no videos found in this directory."); }
+        if (videos.size() == 0) {
+            System.out.println("There were no videos found in this directory.");
+            System.exit(0);
+        }
         else { System.out.println(videos.size() + " videos found."); }
 
+        // Find the corresponding .info.json files for each video.
         videos = input.findMetadata(videos, metadataName, pwd);
         System.out.println(metadataName.size() + "/" + allVideos +
                 " videos have a corresponding .info.json file. (" + (((double)metadataName.size() / allVideos) * 100) + "%)");
 
-        input.parseID(videos, metadataName, pwd);
+        // Parse the id of the found metadata files.
+        input.parseID(videos, metadataName, pwd, youtubeTitle);
 
-        HashMap<String, String> video_status = new HashMap<>();
-        String status = "";
+        HashMap<String, String> video_status = new HashMap<>(); // video title and status
 
-        // Print output on the status of each video
-        for (Map.Entry<String, String> entry : videos.entrySet()) {
-            status = input.videoOnlineStatus(entry.getValue());
-            switch (status) {
-                case "available":
-                    System.out.println(entry.getKey() + " is available on YouTube. https://youtube.com/watch?v=" +
-                            entry.getValue());
-                    break;
-                case "unavailable":
-                    System.out.println(entry.getKey() + " is no longer on YouTube.");
-                    break;
-                case "unlisted":
-                    System.out.println(entry.getKey() + " is available on YouTube, but unlisted. https://youtube.com" +
-                             "/watch?v=" + entry.getValue());
-                    break;
-                case "private":
-                    System.out.println(entry.getKey() + " has been made private.");
-                    break;
-                case "terminated":
-                    System.out.println(entry.getKey() + " is no longer available as the YouTube account which uploaded" +
-                            " this video has been terminated.");
+        if (!noOutput) {
+            if (!noLogging && !minimalOutput) {
+                // This allows the stream to be output at both the log file and console at once
+                System.setOut(new PrintStream(new TeeOutputStream(System.out, logFile)));
             }
-            video_status.put(entry.getKey(), status);
         }
+
+        PrintStream console = System.out; // needed to store to reset later
+
+        // Print status of each individual video
+        output.printEachVideo(videos, video_status, noOutput, minimalOutput, noLogging, youtubeTitle, logFile, console, input);
+
+        // Reset system output
+        System.setOut(System.out);
 
         output.printStatistics(video_status);
     }
